@@ -1,0 +1,223 @@
+== ST_DTWithin
+
+But this query will not use indexes and can take a long time on big datasets. If you need this, you can create geography columns from geometry, create spatial indexes on geography columns, and use ST_DWithin. http://stackoverflow.com/a/12823041
+
+
+What is the best way to find all objects within a radius of another object?
+	
+
+To use the database most efficiently, it is best to do radius queries which combine the radius test with a bounding box test: the bounding box test uses the spatial index, giving fast access to a subset of data which the radius test is then applied to.
+
+The ST_DWithin(geometry, geometry, distance) function is a handy way of performing an indexed distance search. It works by creating a search rectangle large enough to enclose the distance radius, then performing an exact distance search on the indexed subset of results.
+
+For example, to find all objects with 100 meters of POINT(1000 1000) the following query would work well:
+
+SELECT * FROM geotable 
+  WHERE ST_DWithin(geocolumn, 'POINT(1000 1000)', 100.0);
+  
+http://postgis.net/docs/manual-1.3/ch03.html#id434832
+
+Moje:
+
+SELECT * FROM cities
+  WHERE ST_DWithin(geog, 'POINT(51.474579 -0.1718340)', 100.0);
+  
+this works http://stackoverflow.com/questions/10127364/how-to-use-st-dwithin-to-find-near-point#comment13049309_10132323
+
+SELECT ST_AsText(location), name FROM cities
+  WHERE ST_DWithin(ST_SetSRID(ST_MakePoint(51.503071, -0.280303),4326), location,450);
+ 
+SELECT ST_Y(location) as Latitude, ST_X(location) as Longitude, name FROM cities
+  WHERE ST_DWithin(ST_SetSRID(ST_MakePoint(51.503071, -0.280303),4326), location,450);
+
+
+=== install
+
+Download and install PostgreSQL from EnterpriseDB. Run the “StackBuilder” utility and install the PostGIS add-on.
+http://postgis.net/windows_downloads
+
+
+=== solution
+
+create table cities (
+  geog geography,
+  name varchar,
+  id integer primary key
+);
+
+insert into cities
+  select
+    Geography(ST_SetSRID(ST_MakePoint(lon, lat),4326)) as geog,
+    name, id
+  from mytable;
+
+create index cities_gix on cities using gist ( geog );
+
+select st_distance(a.geog, b.geog), b.name
+from cities a, cities b
+where a.name = 'New York'; 
+
+http://postgresql.1045698.n5.nabble.com/locating-cities-within-a-radius-of-another-tp1928736p1928747.html
+
+=== srid
+
+http://www.mbsoft.com.pl/spatialite-cookbook/html/srid.html
+
+Elipsoida WGS-84 (EPSG SRID 4326) stała się podstawowym układem odniesienia w systemach nawigacji satelitarnej
+http://pl.wikipedia.org/wiki/System_odniesienia_WGS_84
+
+SELECT ST_Distance_Spheroid(GeomFromText('POINT(52.218 21.019)', 4326),
+GeomFromText('POINT(52.220 21.010)',4326), 'SPHEROID["WGS 84",
+6378137,298.257223563]') ;
+
+SELECT ST_Distance_Sphere(GeomFromText('POINT(52.218 21.019)', 4326),
+GeomFromText('POINT(52.220 21.010)', 4326)); 
+
+http://forum.cad.pl/liczenie-odleg-o-ci-a-srid-t67883.html
+
+Definicja i cechy przestrzennych baz danych http://www.staff.amu.edu.pl/~kostecki/ZDP/ZDP1.pdf
+
+Typy geometryczne w PostGIS http://www.staff.amu.edu.pl/~kostecki/ZDP/ZDP2.pdf
+
+== tutorial http://www.bostongis.com/?content_name=postgis_tut01
+
+download towns http://wsgw.mass.gov/data/gispub/shape/state/townssurvey_shp.zip
+via
+http://www.mass.gov/anf/research-and-tech/it-serv-and-support/application-serv/office-of-geographic-information-massgis/datalayers/townsurvey.html
+
+
+>cd townssurvey_shp
+>shp2pgsql -s 26986 TOWNS_POLY towns > towns.sql
+Shapefile type: Polygon
+Postgis type: MULTIPOLYGON[2]
+psql -d gisdb -h localhost -U postgres -f towns.sql
+
+http://www.bostongis.com/pgsql2shp_shp2pgsql_quickguide.bqg?outputformat=PDF
+
+== lat and long
+
+double precision 	float8 	double precision floating-point number (8 bytes)
+http://www.postgresql.org/docs/9.2/static/datatype.html
+
+http://www.bostongis.com/PrinterFriendly.aspx?content_name=postgis_tut03
+
+== import csv
+
+psql -d gisdb -h localhost -U postgres -f import.sql
+
+\copy landmarks(name,address,date_built,architect,landmark,latitude,longitude) FROM '/local/path/to/Individual_Landmarks.csv' DELIMITERS ',' CSV HEADER;
+
+- The first argument passed to the copy command specifies the tablename (landmarks) and the columns which the CSV files map to. Our table i ncludes a column gid that is an auto-incremented id which is used as a primary key as well as the_geom geometry column. The CSV does not include either of these columns in the data we are copying. If we don't specify the specific columns that the fields in the CSV map to, errors will occur when attempting to copy the data.
+- The DELIMITERS argument specifies your delimiter.
+- The CSV argument at the end lets PostgreSQL know that the file is CSV.
+- The HEADER argument lets PostgreSQL know that the file includes the headers on the first line.
+
+
+http://www.kevfoo.com/2012/01/Importing-CSV-to-PostGIS/
+
+=== copy permissions
+
+Try \COPY table_name FROM '/var/lib/pgsql/data/file.csv' 
+WITH DELIMITER AS ',' csv header
+
+Notice the backslash before copy, when you run it with back slash it runs with user permissions other wise it just runs as postmaster which in the documentation is deprecated for recent versions of pg :|, anyways this might probably do the trick for ya .
+http://stackoverflow.com/a/13629126
+
+
+The system user "postgres" needs the rights in the file system. Not to confuse with the database user "postgres". And we are talking about a file local to the server, right? If not, you can't use SQL COPY this way.
+http://stackoverflow.com/questions/14083311/permission-denied-when-trying-to-import-a-csv-file-from-pgadmin
+
+
+In any case COPY and \copy are different commands. COPY is done from the 
+server's perspective, \copy from the clients. Hence the permission issues will 
+be different. See below for more detail.
+
+http://www.postgresql.org/docs/8.4/interactive/sql-copy.html
+http://www.postgresql.org/docs/8.4/interactive/app-psql.html
+
+
+As far as I know the reason for it is, that along the specified file path all the intermediate directories need to be world-accessible. So it is much safer and easier to use /tmp/ or /Users/Shared. 
+http://forums.enterprisedb.com/posts/list/2819.page;jsessionid=64ECEAF223C1A7C89AA36A0CBBF88BF5#10444
+
+== pgadmin language
+
+- Open pgadmin.
+- File > Options
+- Change 'user language'
+
+http://stackoverflow.com/questions/5555497/change-language-locale-of-postgres-pgadmin
+
+== plsql language
+
+C:\Program Files\PostgreSQL\9.2\data\postgresql.conf
+lc_messages = 'English, United States'
+
+cmd.exe as Admin
+NET STOP postgresql-x64-9.2
+NET START postgresql-x64-9.2
+
+== speed
+
+On further experimentation, it turns out that PointFromText is perhaps the slowest way of doing this in Postgis. Using a combination of ST_Setsrid and ST_Point is on the magnitude of 7 to 10 times faster at least for versions of PostGIS 1.2 and above. ST_GeomFromText comes in second (replace ST_PointFromText with ST_GeomFromText) at about 3 to 1.5 times slower than ST_SetSRID ST_Point. 
+
+http://www.bostongis.com/?content_name=postgis_tut03
+
+== 4326
+
+If your data is in SRID=4326 the distance you are specifying is in radians.
+
+You either have to use ST_Transform and meter based coordinate system, or one of the two functions: ST_Distance_Sphere (faster, less accurate) or ST_Distance_Spheroid.
+
+http://stackoverflow.com/a/8445283 http://gis.stackexchange.com/a/32716
+
+== open street map
+
+Openstreetmap uses a Mercator projection.
+When you specify '100' you're actually saying 'give me everything
+within 100 *degrees*'
+
+http://postgis.17.x6.nabble.com/Issue-with-spatial-query-PostGIS-ST-DWithin-SRID-transform-tp3565231p3565236.html
+
+== I need to convert geometry information to the GPS format
+
+SELECT
+  'lat: ' || ST_Y(a.geometry) as Latitude,
+  'long: ' || ST_X(a.geometry) as Longitude
+FROM (
+    SELECT ST_Transform(geometry,4326) AS geometry
+    FROM YOUR_TABLE
+    );
+
+http://www.mail-archive.com/postgis-users@postgis.refractions.net/msg04887.html
+http://gis.stackexchange.com/questions/42970/how-to-get-coordinates-from-geometry-in-postgis
+
+== geometry or geography
+	
+You description seemed to indicate you had no geometry/geographic field at all, just a lon column and a lat column, and my example is based on that assumption. If you do in fact have a geometry column, then no, it won't work so well, because the geometry type does all calculations on the plane, using the units of the projection the data is stored in. Lon/lat coordinates are not planar, they are spherical in degrees, so planar calculations tend to spit out useless answers. Just convert your column to geography, everything will get much simpler very quickly.
+
+http://gis.stackexchange.com/questions/57072/how-to-find-points-in-a-kilometre-radius
+
+== wgs84
+
+WGS84 is measured in meters by the way.
+
+http://unserializableone.blogspot.com/2007/02/using-postgis-to-find-points-of.html
+
+== calculator
+
+http://www.gpsvisualizer.com/calculators
+
+http://www.movable-type.co.uk/scripts/latlong.html
+
+== golang
+
+db.Ping is only available in Go 1.1
+https://github.com/go-sql-driver/mysql/issues/82#issuecomment-18297683
+
+We have moved our database/sql driver for postgres (pq) to the lib organization on Github.
+github.com/bmizerany/pq -> github.com/lib/pq.
+== Links
+
+* http://www.cubrid.org/blog/dev-platform/20-minutes-to-understanding-spatial-database/
+* good practice to store a version of the data in the projection in which it was captured http://gis.stackexchange.com/questions/2769/what-strategies-criteria-or-rules-to-use-for-selecting-coordinate-systems
+* http://kartoweb.itc.nl/geometrics/Map%20projections/Understanding%20Map%20Projections.pdf

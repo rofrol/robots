@@ -16,16 +16,10 @@ type Location struct {
 	Name string
 }
 
-func r_6043(c chan string) {
-	for {
-		fmt.Println(<-c)
-	}
-}
-
-func dispatcher(c chan string) {
+func robot(table string, c1 chan Location) {
 	db := openConn()
 	defer db.Close()
-	stmt, err := db.Prepare("select lat, lng, name from t_6043")
+	stmt, err := db.Prepare("select lat, lng, name from " + table)
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)
@@ -39,23 +33,27 @@ func dispatcher(c chan string) {
 	}
 
 	location := Location{}
-	for rows.Next() {
+	for i := 0; rows.Next(); i++ {
 		rows.Scan(&location.Lat, &location.Lng, &location.Name)
-		c <- fmt.Sprintln(location)
-		time.Sleep(time.Second * 1)
+		c1 <- location
+		if i%10 == 0 {
+			time.Sleep(time.Second * 1)
+		}
 	}
 }
 
-func mintime(table string) time.Time {
+func within(r1_lat float64, r1_lng float64, radius float64) {
 	db := openConn()
 	defer db.Close()
-	ts := time.Time{}
-	err := db.QueryRow("select min(ts) from " + table).Scan(&ts)
+
+	var tube_name string
+	q := fmt.Sprintf("SELECT name FROM tube WHERE ST_DWithin(ST_SetSRID(ST_MakePoint(%v, %v),4326), geom_4326,%v)", r1_lat, r1_lng, radius)
+	err := db.QueryRow(q).Scan(&tube_name)
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)
 	}
-	return ts
+	fmt.Println(r1_lat, r1_lng, tube_name)
 }
 
 func openConn() *sql.DB {
@@ -71,22 +69,21 @@ func openConn() *sql.DB {
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	now := time.Now()
-	min_6043 := mintime("t_6043")
-	min_5937 := mintime("t_5937")
-	min := min_6043
-	if min_6043.After(min_5937) {
-		min = min_5937
-	}
-	fmt.Println("now", now)
-	fmt.Println("min_6043", min_6043)
-	fmt.Println("min_5937", min_5937)
-	fmt.Println("min     ", min)
-	dur := now.Sub(min)
-	fmt.Println("dur", dur)
-	c := make(chan string)
-	go dispatcher(c)
-	go r_6043(c)
-	var input string
-	fmt.Scanln(&input)
+	c_6043 := make(chan Location, 10)
+	c_5937 := make(chan Location, 10)
+	go robot("t_6043", c_6043)
+	go robot("t_5937", c_6043)
+	go func() {
+		for {
+			select {
+			case msg1 := <-c_6043:
+				fmt.Println(msg1)
+				within(msg1.Lat, msg1.Lng, float64(150))
+			case msg2 := <-c_5937:
+				fmt.Println(msg2)
+				within(msg2.Lat, msg2.Lng, float64(150))
+			}
+		}
+	}()
+	time.Sleep(time.Second * 5)
 }

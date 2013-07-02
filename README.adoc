@@ -209,6 +209,10 @@ http://www.gpsvisualizer.com/calculators
 
 http://www.movable-type.co.uk/scripts/latlong.html
 
+== default srid
+
+SELECT st_srid(geom_4326) FROM tube
+
 == golang
 
 db.Ping is only available in Go 1.1
@@ -216,6 +220,7 @@ https://github.com/go-sql-driver/mysql/issues/82#issuecomment-18297683
 
 We have moved our database/sql driver for postgres (pq) to the lib organization on Github.
 github.com/bmizerany/pq -> github.com/lib/pq.
+
 == Links
 
 * http://www.cubrid.org/blog/dev-platform/20-minutes-to-understanding-spatial-database/

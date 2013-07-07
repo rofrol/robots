@@ -47,7 +47,7 @@ func within(r1_lat float64, r1_lng float64, radius float64) {
 	defer db.Close()
 
 	var tube_name string
-	q := fmt.Sprintf("SELECT name FROM tube WHERE ST_DWithin(ST_SetSRID(ST_MakePoint(%v, %v),4326), geom_4326,%v)", r1_lng, r1_lat, radius)
+	q := fmt.Sprintf("SELECT name FROM tube WHERE ST_DWithin(ST_SetSRID(ST_MakePoint(%v, %v),4326, true), geom_4326,%v)", r1_lng, r1_lat, radius)
 	err := db.QueryRow(q).Scan(&tube_name)
 	if err != nil {
 		log.Fatal(err)

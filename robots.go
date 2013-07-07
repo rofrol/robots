@@ -45,14 +45,13 @@ func robot(table string, c1 chan Location) {
 	}
 }
 
-func within(r1_lat float64, r1_lng float64, radius float64) {
-
+func within(r Location, radius float64) {
 	q := fmt.Sprintf(`
 SELECT ST_Y(t.geom_4326), ST_X(t.geom_4326), t.name, 
 ST_Distance_Sphere(ST_SetSRID(ST_Point(%v, %v),4326), t.geom_4326)
 FROM tube t join t_6043 r
 on ST_DWithin(ST_SetSRID(ST_Point(%v, %v),4326), t.geom_4326, %v, true)
-`, r1_lng, r1_lat, r1_lng, r1_lat, radius)
+`, r.Lng, r.Lat, r.Lng, r.Lat, radius)
 
 	//fmt.Println(q)
 	loc := Location{}
@@ -62,7 +61,7 @@ on ST_DWithin(ST_SetSRID(ST_Point(%v, %v),4326), t.geom_4326, %v, true)
 		log.Fatal(err)
 		os.Exit(1)
 	} else if err != sql.ErrNoRows {
-		fmt.Println(loc, int(dist), traffic[rand.Intn(3)])
+		fmt.Println(time.Now().Format("15:04:05"), r.Name, loc.Name, traffic[rand.Intn(3)], int(dist))
 	}
 }
 
@@ -95,11 +94,9 @@ func main() {
 		for {
 			select {
 			case msg1 := <-c_6043:
-				fmt.Println(msg1)
-				within(msg1.Lat, msg1.Lng, float64(350))
+				within(msg1, float64(350))
 			case msg2 := <-c_5937:
-				fmt.Println(msg2)
-				within(msg2.Lat, msg2.Lng, float64(350))
+				within(msg2, float64(350))
 			}
 		}
 	}()

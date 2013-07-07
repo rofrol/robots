@@ -21,7 +21,7 @@ var traffic = [...]string{"HEAVY", "LIGHT", "MODERATE"}
 
 var db *sql.DB
 
-func robot(table string, c1 chan Location) {
+func dispatcher(table string, c1 chan<- Location) {
 	stmt, err := db.Prepare("select lat, lng, name from " + table)
 	if err != nil {
 		log.Fatal(err)
@@ -88,8 +88,8 @@ func main() {
 
 	c_6043 := make(chan Location, 10)
 	c_5937 := make(chan Location, 10)
-	go robot("t_6043", c_6043)
-	go robot("t_5937", c_6043)
+	go dispatcher("t_6043", c_6043)
+	go dispatcher("t_5937", c_6043)
 	go func() {
 		for {
 			select {

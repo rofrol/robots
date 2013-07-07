@@ -17,9 +17,9 @@ type Location struct {
 	Name string
 }
 
+var db *sql.DB
+
 func robot(table string, c1 chan Location) {
-	db := openConn()
-	defer db.Close()
 	stmt, err := db.Prepare("select lat, lng, name from " + table)
 	if err != nil {
 		log.Fatal(err)
@@ -45,8 +45,6 @@ func robot(table string, c1 chan Location) {
 
 func within(r1_lat float64, r1_lng float64, radius float64) {
 	traffic := [...]string{"HEAVY", "LIGHT", "MODERATE"}
-	db := openConn()
-	defer db.Close()
 
 	q := fmt.Sprintf(`
 SELECT ST_Y(t.geom_4326), ST_X(t.geom_4326), t.name, 
@@ -67,18 +65,26 @@ on ST_DWithin(ST_SetSRID(ST_Point(%v, %v),4326), t.geom_4326, %v, true)
 	}
 }
 
-func openConn() *sql.DB {
-	db, err := sql.Open("postgres", "user=postgres dbname=gisdb sslmode=disable password=droot")
+func openConn() {
+	var err error
+	db, err = sql.Open("postgres", "user=postgres dbname=gisdb sslmode=disable password=droot")
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)
 	}
 	db.SetMaxIdleConns(100)
-	return db
+
+	err = db.Ping() // This DOES open a connection if necessary. This makes sure the database is accessible
+	if err != nil {
+		log.Fatalf("Error on opening database connection: %s", err.Error())
+		os.Exit(1)
+	}
 }
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
+	openConn()
+	defer db.Close()
 
 	c_6043 := make(chan Location, 10)
 	c_5937 := make(chan Location, 10)

@@ -17,6 +17,8 @@ type Location struct {
 	Name string
 }
 
+var traffic = [...]string{"HEAVY", "LIGHT", "MODERATE"}
+
 var db *sql.DB
 
 func robot(table string, c1 chan Location) {
@@ -44,7 +46,6 @@ func robot(table string, c1 chan Location) {
 }
 
 func within(r1_lat float64, r1_lng float64, radius float64) {
-	traffic := [...]string{"HEAVY", "LIGHT", "MODERATE"}
 
 	q := fmt.Sprintf(`
 SELECT ST_Y(t.geom_4326), ST_X(t.geom_4326), t.name, 
